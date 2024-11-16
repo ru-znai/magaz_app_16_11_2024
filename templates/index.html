@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Магазин</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Магазин</a>
+            {% if username %}
+                <span class="navbar-text">Привет, {{ username }}!</span>
+                <a class="btn btn-outline-danger" href="/logout">Выйти</a>
+            {% else %}
+                <a class="btn btn-outline-primary" href="/login">Войти</a>
+            {% endif %}
+            <button class="btn btn-outline-primary" onclick="openCart()">Корзина</button>
+        </div>
+    </nav>
+    <div class="container my-4">
+        <div id="products" class="row">
+            <!-- Карточки товаров появятся здесь -->
+        </div>
+    </div>
+
+    <div class="modal fade" id="cartModal" tabindex="-1" aria-labelledby="cartModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="cartModalLabel">Корзина</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <ul id="cartItems" class="list-group">
+                        <!-- Товары из корзины появятся здесь -->
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                    <button type="button" class="btn btn-primary" onclick="checkout()">Оформить заказ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+
+        let cartModal = new bootstrap.Modal(document.getElementById('cartModal'));
+
+        // Функция загрузки товаров
+        function loadProducts() {
+            axios.get('/api/products')
+                .then(response => {
+                    const products = response.data;
+                    const container = document.getElementById('products');
+                    container.innerHTML = '';
+                    products.forEach(product => {
+                        const isAvailable = product.quantity > 0;
+                        const card = document.createElement('div');
+                        card.className = `col-md-4 ${!isAvailable ? 'disabled-card' : ''}`;
+                        card.innerHTML = `
+                            <div class="card">
+                                <img src="${product.image_url}" class="card-img-top" alt="${product.name}">
+                                <div class="card-body">
+                                    <h5 class="card-title">${product.name}</h5>
+                                    <p class="card-text">Цена: $${product.price}</p>
+                                    <p class="card-text">${isAvailable ? `Осталось: ${product.quantity}` : 'Нет в наличии'}</p>
+                                    <button class="btn btn-${isAvailable ? 'primary' : 'secondary'}"
+                                        ${isAvailable ? '' : 'disabled'}
+                                        onclick="addToCart(${product.id})">В корзину</button>
+                                </div>
+                            </div>
+                        `;
+                        container.appendChild(card);
+                    });
+                });
+        }
+
+        // Функция добавления товара в корзину
+        function addToCart(productId) {
+            axios.post('/api/cart', { id: productId })
+                .then(response => {
+                    alert(response.data.message);
+                    loadProducts();
+                });
+        }
+
+        // Функция открытия корзины
+        function openCart() {
+            axios.get('/api/cart')
+                .then(response => {
+                    const cartItems = document.getElementById('cartItems');
+                    cartItems.innerHTML = '';
+                    response.data.forEach(item => {
+                        const li = document.createElement('li');
+                        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                        li.innerHTML = `
+                            ${item.name} - $${item.price} × ${item.quantity}
+                            <div>
+                                <button class="btn btn-sm btn-secondary" onclick="updateQuantity(${item.id}, ${item.quantity - 1})">-</button>
+                                <button class="btn btn-sm btn-secondary" onclick="updateQuantity(${item.id}, ${item.quantity + 1})">+</button>
+                                <button class="btn btn-danger btn-sm" onclick="removeFromCart(${item.id})">Удалить</button>
+                            </div>
+                        `;
+                        cartItems.appendChild(li);
+                    });
+                    cartModal.show();
+                });
+        }
+
+        // Функция обновления количества товара в корзине
+        function updateQuantity(productId, quantity) {
+            if (quantity < 0) return; // Количество не может быть отрицательным
+            axios.put(`/api/cart/${productId}`, { quantity: quantity })
+                .then(response => {
+                    alert(response.data.message);
+                    openCart();
+                });
+        }
+
+        // Функция удаления товара из корзины
+        function removeFromCart(productId) {
+            axios.delete(`/api/cart/${productId}`)
+                .then(response => {
+                    alert(response.data.message);
+                    openCart();
+                });
+        }
+
+        // Функция оформления заказа
+        function checkout() {
+            axios.post('/api/checkout')
+                .then(response => {
+                    alert(response.data.message);
+                    loadProducts();
+                    cartModal.hide();
+                });
+        }
+
+        // Инициализация страницы
+        loadProducts();
+    </script>
+</body>
+</html>
